@@ -64,19 +64,36 @@ async function registerCommands(commandsData) {
   }
 
   const rest = new REST({ version: '10' }).setToken(token);
-  try {
-    if (guildId) {
+  
+  // Intentar registrar en servidor específico primero
+  if (guildId) {
+    try {
       await rest.put(
         Routes.applicationGuildCommands(clientId, guildId),
         { body: commandsData }
       );
-      console.log('[bot] Comandos registrados en servidor específico');
-    } else {
-      await rest.put(Routes.applicationCommands(clientId), { body: commandsData });
-      console.log('[bot] Comandos globales registrados');
+      console.log(`[bot] ✅ Comandos registrados en servidor (guild: ${guildId})`);
+      return;
+    } catch (error) {
+      if (error.code === 50001) {
+        console.warn(`[bot] ⚠️  No se pudo registrar comandos en el servidor (Missing Access).`);
+        console.warn(`[bot] ⚠️  Asegúrate de que el bot tenga el scope 'applications.commands' y esté invitado al servidor.`);
+        console.warn(`[bot] ⚠️  Intentando registrar comandos globales como fallback...`);
+      } else {
+        console.error('[bot] Error registrando comandos en servidor:', error.message);
+      }
     }
+  }
+  
+  // Fallback: registrar comandos globales
+  try {
+    await rest.put(Routes.applicationCommands(clientId), { body: commandsData });
+    console.log('[bot] ✅ Comandos globales registrados (pueden tardar hasta 1 hora en aparecer)');
   } catch (error) {
-    console.error('[bot] Error registrando comandos', error);
+    console.error('[bot] ❌ Error registrando comandos globales:', error.message);
+    if (error.code === 50001) {
+      console.error('[bot] ❌ El bot no tiene permisos para registrar comandos. Verifica los scopes en Discord Developer Portal.');
+    }
   }
 }
 
