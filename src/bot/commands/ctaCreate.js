@@ -10,6 +10,11 @@ import {
 
 const API_BASE_URL = process.env.BACKEND_API_URL ?? `http://localhost:${process.env.PORT || 4000}`;
 
+// Validar que la URL del API esté configurada
+if (!API_BASE_URL) {
+  console.error('[bot] ERROR: BACKEND_API_URL no está configurado');
+}
+
 export const data = new SlashCommandBuilder()
   .setName('cta')
   .setDescription('Gestiona las CTA disponibles')
@@ -83,7 +88,12 @@ export async function execute(interaction) {
   const subcommand = interaction.options.getSubcommand();
 
   if (subcommand === 'create') {
-    await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+    try {
+      await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+    } catch (error) {
+      console.error('[bot] Error haciendo deferReply', error);
+      return;
+    }
 
     const title = interaction.options.getString('titulo', true);
     const dateStr = interaction.options.getString('hora', true);
@@ -107,7 +117,8 @@ export async function execute(interaction) {
       });
 
       if (!response.ok) {
-        throw new Error(`Error ${response.status}`);
+        const errorText = await response.text();
+        throw new Error(`Error ${response.status}: ${errorText}`);
       }
 
       const { data } = await response.json();
@@ -128,19 +139,30 @@ export async function execute(interaction) {
       const embed = await createCtaEmbed(data, compo, postulants);
       const buttons = createCtaButtons(data.id);
 
+      // Verificar que el canal existe y es accesible
+      if (!interaction.channel) {
+        throw new Error('No se puede acceder al canal');
+      }
+
       // Enviar mensaje público con embed y botones
-      const message = await interaction.channel.send({
-        embeds: [embed],
-        components: [buttons]
-      });
+      try {
+        await interaction.channel.send({
+          embeds: [embed],
+          components: [buttons]
+        });
 
-      // Guardar el message ID en la base de datos para poder actualizarlo después
-      // TODO: Agregar campo message_id a la tabla ctas
-
-      await interaction.editReply(`✅ CTA creada y publicada correctamente!`);
+        await interaction.editReply(`✅ CTA creada y publicada correctamente!`);
+      } catch (channelError) {
+        console.error('[bot] Error enviando mensaje al canal', channelError);
+        await interaction.editReply(`✅ CTA creada con ID \`${data.id}\`, pero no se pudo publicar el mensaje en el canal.`);
+      }
     } catch (error) {
       console.error('[bot] Error creando CTA', error);
-      await interaction.editReply('❌ No se pudo crear la CTA, revisa los logs.');
+      try {
+        await interaction.editReply(`❌ No se pudo crear la CTA: ${error.message}`);
+      } catch (editError) {
+        console.error('[bot] Error editando respuesta', editError);
+      }
     }
 
     return;

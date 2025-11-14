@@ -7,19 +7,27 @@ export const name = 'interactionCreate';
 export async function execute(client, interaction) {
   if (interaction.isChatInputCommand()) {
     const command = client.commands.get(interaction.commandName);
-    if (!command) return;
+    if (!command) {
+      console.warn(`[bot] Comando no encontrado: ${interaction.commandName}`);
+      return;
+    }
 
     try {
       await command.execute(interaction);
     } catch (error) {
       console.error('[bot] Error ejecutando comando', error);
-      if (interaction.deferred || interaction.replied) {
-        await interaction.editReply('Ocurrió un error al ejecutar el comando.');
-      } else {
-        await interaction.reply({
-          content: 'Ocurrió un error al ejecutar el comando.',
-          flags: MessageFlags.Ephemeral
-        });
+      console.error('[bot] Stack trace:', error.stack);
+      try {
+        if (interaction.deferred || interaction.replied) {
+          await interaction.editReply('❌ Ocurrió un error al ejecutar el comando. Revisa los logs.');
+        } else {
+          await interaction.reply({
+            content: '❌ Ocurrió un error al ejecutar el comando. Revisa los logs.',
+            flags: MessageFlags.Ephemeral
+          });
+        }
+      } catch (replyError) {
+        console.error('[bot] Error enviando mensaje de error', replyError);
       }
     }
     return;
