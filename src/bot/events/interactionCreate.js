@@ -40,12 +40,36 @@ export async function execute(client, interaction) {
   }
 
   if (interaction.isButton()) {
-    const [type, action, ctaId] = interaction.customId.split(':');
+    try {
+      const parts = interaction.customId.split(':');
+      if (parts.length < 3) {
+        console.warn('[bot] CustomId de botón inválido:', interaction.customId);
+        return;
+      }
 
-    if (type === 'cta') {
-      await ctaCommand.handleButtonInteraction(interaction, ctaId, action);
-      return;
+      const [type, action, ...ctaIdParts] = parts;
+      const ctaId = ctaIdParts.join(':'); // En caso de que el ID tenga ':'
+
+      if (type === 'cta' && action && ctaId) {
+        await ctaCommand.handleButtonInteraction(interaction, ctaId, action);
+        return;
+      }
+    } catch (error) {
+      console.error('[bot] Error manejando botón', error, interaction.customId);
+      try {
+        if (interaction.deferred || interaction.replied) {
+          await interaction.editReply('❌ Error en esta interacción');
+        } else {
+          await interaction.reply({
+            content: '❌ Error en esta interacción',
+            flags: MessageFlags.Ephemeral
+          });
+        }
+      } catch (replyError) {
+        console.error('[bot] Error enviando mensaje de error', replyError);
+      }
     }
+    return;
   }
 }
 

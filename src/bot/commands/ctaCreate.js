@@ -315,17 +315,17 @@ export async function createCtaEmbed(cta, compo, postulants = []) {
 
 function createCtaButtons(ctaId) {
   const joinButton = new ButtonBuilder()
-    .setCustomId(`cta-join:${ctaId}`)
+    .setCustomId(`cta:join:${ctaId}`)
     .setLabel('Join')
     .setStyle(ButtonStyle.Success);
 
   const leaveButton = new ButtonBuilder()
-    .setCustomId(`cta-leave:${ctaId}`)
+    .setCustomId(`cta:leave:${ctaId}`)
     .setLabel('Leave')
     .setStyle(ButtonStyle.Danger);
 
   const pingButton = new ButtonBuilder()
-    .setCustomId(`cta-ping:${ctaId}`)
+    .setCustomId(`cta:ping:${ctaId}`)
     .setLabel('Ping')
     .setEmoji('⚔️')
     .setStyle(ButtonStyle.Danger);
@@ -334,10 +334,11 @@ function createCtaButtons(ctaId) {
 }
 
 export async function handleButtonInteraction(interaction, ctaId, action) {
-  const userId = interaction.user.id;
-  const userName = interaction.user.username;
+  try {
+    const userId = interaction.user.id;
+    const userName = interaction.user.username;
 
-  if (action === 'join') {
+    if (action === 'join') {
     // Mostrar select menu para elegir roles
     const selectMenu = new StringSelectMenuBuilder()
       .setCustomId(`cta-postular:${ctaId}`)
@@ -403,6 +404,16 @@ export async function handleButtonInteraction(interaction, ctaId, action) {
       });
     }
     return;
+  } catch (error) {
+    console.error('[bot] Error en handleButtonInteraction', error);
+    if (interaction.deferred || interaction.replied) {
+      await interaction.editReply('❌ Error procesando la acción. Intenta más tarde.');
+    } else {
+      await interaction.reply({
+        content: '❌ Error procesando la acción. Intenta más tarde.',
+        flags: MessageFlags.Ephemeral
+      });
+    }
   }
 }
 
