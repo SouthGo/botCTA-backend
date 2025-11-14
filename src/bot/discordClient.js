@@ -54,12 +54,12 @@ async function loadCommands() {
 
 async function registerCommands(commandsData) {
   if (!commandsData.length) return;
-  const token = process.env.DISCORD_BOT_TOKEN;
+  const token = process.env.DISCORD_TOKEN || process.env.DISCORD_BOT_TOKEN;
   const clientId = process.env.DISCORD_CLIENT_ID;
   const guildId = process.env.DISCORD_GUILD_ID;
 
   if (!token || !clientId) {
-    console.warn('[bot] Faltan DISCORD_BOT_TOKEN o DISCORD_CLIENT_ID, no se registrarán comandos');
+    console.warn('[bot] Faltan DISCORD_TOKEN (o DISCORD_BOT_TOKEN) o DISCORD_CLIENT_ID, no se registrarán comandos');
     return;
   }
 
@@ -100,10 +100,10 @@ async function loadEvents() {
 }
 
 export async function initializeBot() {
-  const token = process.env.DISCORD_BOT_TOKEN;
+  const token = process.env.DISCORD_TOKEN || process.env.DISCORD_BOT_TOKEN;
 
   if (!token) {
-    console.warn('[bot] DISCORD_BOT_TOKEN no configurado, el bot no se iniciará');
+    console.warn('[bot] DISCORD_TOKEN (o DISCORD_BOT_TOKEN) no configurado, el bot no se iniciará');
     return botBridge;
   }
 
