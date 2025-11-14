@@ -1,10 +1,11 @@
 import {
   ActionRowBuilder,
+  MessageFlags,
   SlashCommandBuilder,
   StringSelectMenuBuilder
 } from 'discord.js';
 
-const API_BASE_URL = process.env.BACKEND_API_URL ?? 'http://localhost:4000';
+const API_BASE_URL = process.env.BACKEND_API_URL ?? `http://localhost:${process.env.PORT || 4000}`;
 
 export const data = new SlashCommandBuilder()
   .setName('cta')
@@ -79,7 +80,7 @@ export async function execute(interaction) {
   const subcommand = interaction.options.getSubcommand();
 
   if (subcommand === 'create') {
-    await interaction.deferReply({ ephemeral: true });
+    await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
     const payload = {
       title: interaction.options.getString('titulo', true),
@@ -112,7 +113,7 @@ export async function execute(interaction) {
   }
 
   if (subcommand === 'listar') {
-    await interaction.deferReply({ ephemeral: true });
+    await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
     try {
       const response = await fetch(`${API_BASE_URL}/cta/list`);
@@ -137,7 +138,7 @@ export async function execute(interaction) {
   }
 
   if (subcommand === 'asignar') {
-    await interaction.deferReply({ ephemeral: true });
+    await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
     const ctaId = interaction.options.getString('cta_id', true);
 
@@ -166,7 +167,7 @@ export async function execute(interaction) {
   }
 
   if (subcommand === 'cerrar') {
-    await interaction.deferReply({ ephemeral: true });
+    await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
     try {
       const ctaId = interaction.options.getString('cta_id', true);

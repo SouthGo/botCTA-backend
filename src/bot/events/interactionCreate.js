@@ -1,3 +1,4 @@
+import { MessageFlags } from 'discord.js';
 import ctaCommand from '../commands/ctaCreate.js';
 import postularCommand from '../commands/postular.js';
 
@@ -17,7 +18,7 @@ export async function execute(client, interaction) {
       } else {
         await interaction.reply({
           content: 'Ocurrió un error al ejecutar el comando.',
-          ephemeral: true
+          flags: MessageFlags.Ephemeral
         });
       }
     }

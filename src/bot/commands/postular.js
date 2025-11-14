@@ -1,5 +1,6 @@
 import {
   ActionRowBuilder,
+  MessageFlags,
   SlashCommandBuilder,
   StringSelectMenuBuilder
 } from 'discord.js';
@@ -13,7 +14,7 @@ const AVAILABLE_ROLES = [
   { value: 'scout', label: 'Scout' }
 ];
 
-const API_BASE_URL = process.env.BACKEND_API_URL ?? 'http://localhost:4000';
+const API_BASE_URL = process.env.BACKEND_API_URL ?? `http://localhost:${process.env.PORT || 4000}`;
 
 export const data = new SlashCommandBuilder()
   .setName('postular')
@@ -40,7 +41,7 @@ export async function execute(interaction) {
   await interaction.reply({
     content: 'Elige los roles para los que quieres postularte.',
     components: [row],
-    ephemeral: true
+    flags: MessageFlags.Ephemeral
   });
 }
 
