@@ -160,3 +160,15 @@ export async function getPostulantHistory(userId) {
   return data;
 }
 
+export async function removePostulant(ctaId, userId) {
+  const supabase = getClient();
+  const { error } = await supabase
+    .from('cta_postulants')
+    .delete()
+    .eq('cta_id', ctaId)
+    .eq('user_id', userId);
+
+  if (error) throw error;
+  return { success: true };
+}
+
