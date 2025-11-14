@@ -38,6 +38,15 @@ export async function execute(client, interaction) {
       return;
     }
   }
+
+  if (interaction.isButton()) {
+    const [type, action, ctaId] = interaction.customId.split(':');
+
+    if (type === 'cta') {
+      await ctaCommand.handleButtonInteraction(interaction, ctaId, action);
+      return;
+    }
+  }
 }
 
 export default { name, execute };

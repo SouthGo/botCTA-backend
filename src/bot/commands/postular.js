@@ -63,16 +63,57 @@ export async function handleSelect(interaction, ctaId) {
     if (!response.ok) throw new Error(`Error ${response.status}`);
 
     await interaction.update({
-      content: '¡Postulación enviada! Mucha suerte.',
+      content: '✅ ¡Postulación enviada! Mucha suerte.',
       components: []
     });
+
+    // Intentar actualizar el embed del mensaje original de la CTA
+    try {
+      await updateCtaMessage(interaction, ctaId);
+    } catch (error) {
+      console.warn('[bot] No se pudo actualizar el mensaje de la CTA', error);
+    }
   } catch (error) {
     console.error('[bot] Error registrando postulación', error);
     await interaction.update({
-      content: 'No se pudo registrar tu postulación. Intenta más tarde.',
+      content: '❌ No se pudo registrar tu postulación. Intenta más tarde.',
       components: []
     });
   }
+}
+
+async function updateCtaMessage(interaction, ctaId) {
+  // Buscar el mensaje de la CTA en el canal
+  // Por ahora, buscamos mensajes recientes del bot
+  const messages = await interaction.channel.messages.fetch({ limit: 50 });
+  const ctaMessage = messages.find(msg => 
+    msg.author.bot && 
+    msg.embeds.length > 0 && 
+    msg.embeds[0].footer?.text?.includes(ctaId)
+  );
+
+  if (!ctaMessage) return;
+
+  // Obtener datos actualizados de la CTA
+  const [ctaResponse, postulantsResponse] = await Promise.all([
+    fetch(`${API_BASE_URL}/cta/list?id=${ctaId}`),
+    fetch(`${API_BASE_URL}/cta/${ctaId}/postulants`)
+  ]);
+
+  if (!ctaResponse.ok || !postulantsResponse.ok) return;
+
+  const { data: ctas } = await ctaResponse.json();
+  const { data: postulants } = await postulantsResponse.json();
+  const cta = ctas?.[0];
+
+  if (!cta) return;
+
+  // Importar función para crear embed
+  const { createCtaEmbed } = await import('./ctaCreate.js');
+  const embed = await createCtaEmbed(cta, cta.compo || {}, postulants || []);
+
+  // Actualizar el mensaje
+  await ctaMessage.edit({ embeds: [embed] });
 }
 
 export default { data, execute, handleSelect };

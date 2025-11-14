@@ -1,5 +1,8 @@
 import {
   ActionRowBuilder,
+  ButtonBuilder,
+  ButtonStyle,
+  EmbedBuilder,
   MessageFlags,
   SlashCommandBuilder,
   StringSelectMenuBuilder
@@ -82,11 +85,16 @@ export async function execute(interaction) {
   if (subcommand === 'create') {
     await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
+    const title = interaction.options.getString('titulo', true);
+    const dateStr = interaction.options.getString('hora', true);
+    const compo = parseMaybeJson(interaction.options.getString('compo'));
+    const description = interaction.options.getString('descripcion') ?? '';
+
     const payload = {
-      title: interaction.options.getString('titulo', true),
-      date: interaction.options.getString('hora', true),
-      compo: parseMaybeJson(interaction.options.getString('compo')),
-      description: interaction.options.getString('descripcion') ?? '',
+      title,
+      date: dateStr,
+      compo,
+      description,
       createdBy: interaction.user.username,
       guildId: interaction.guildId
     };
@@ -103,10 +111,36 @@ export async function execute(interaction) {
       }
 
       const { data } = await response.json();
-      await interaction.editReply(`CTA creada con ID \`${data.id}\``);
+      
+      // Obtener postulantes (inicialmente vacío)
+      let postulants = [];
+      try {
+        const postulantsResponse = await fetch(`${API_BASE_URL}/cta/${data.id}/postulants`);
+        if (postulantsResponse.ok) {
+          const result = await postulantsResponse.json();
+          postulants = result.data || [];
+        }
+      } catch (error) {
+        console.warn('[bot] No se pudieron obtener postulantes iniciales', error);
+      }
+      
+      // Crear embed con la información de la CTA
+      const embed = await createCtaEmbed(data, compo, postulants);
+      const buttons = createCtaButtons(data.id);
+
+      // Enviar mensaje público con embed y botones
+      const message = await interaction.channel.send({
+        embeds: [embed],
+        components: [buttons]
+      });
+
+      // Guardar el message ID en la base de datos para poder actualizarlo después
+      // TODO: Agregar campo message_id a la tabla ctas
+
+      await interaction.editReply(`✅ CTA creada y publicada correctamente!`);
     } catch (error) {
       console.error('[bot] Error creando CTA', error);
-      await interaction.editReply('No se pudo crear la CTA, revisa los logs.');
+      await interaction.editReply('❌ No se pudo crear la CTA, revisa los logs.');
     }
 
     return;
@@ -220,6 +254,158 @@ function buildAssignmentComponents(ctaId, postulants) {
   return rows;
 }
 
+export async function createCtaEmbed(cta, compo, postulants = []) {
+  const date = new Date(cta.date);
+  const utcTime = date.toISOString().substring(11, 16);
+  const localTime = date.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' });
+  
+  const embed = new EmbedBuilder()
+    .setTitle(cta.title)
+    .setColor(0x5865F2) // Color Discord
+    .addFields(
+      { name: '📅 Fecha', value: date.toLocaleDateString('es-ES'), inline: true },
+      { name: '🕐 Hora (UTC)', value: utcTime, inline: true },
+      { name: '🕐 Hora (Local)', value: localTime, inline: true }
+    );
+
+  if (cta.description) {
+    embed.setDescription(cta.description);
+  }
+
+  // Agregar composición si existe
+  if (compo && Object.keys(compo).length > 0) {
+    const compoText = Object.entries(compo)
+      .map(([role, count]) => `${role}: ${count}`)
+      .join('\n');
+    embed.addFields({ name: '⚔️ Composición', value: compoText, inline: false });
+  }
+
+  // Agregar listas de party si hay postulantes
+  if (postulants && postulants.length > 0) {
+    const party1 = postulants.slice(0, 20);
+    const party2 = postulants.slice(20, 40);
+
+    const party1Text = party1.length > 0
+      ? party1.map((p, i) => {
+          const role = p.final_role ? ` - ${p.final_role}` : '';
+          const checkmark = p.final_role ? ' ✅' : '';
+          return `${i + 1}. ${p.user_name}${role}${checkmark}`;
+        }).join('\n')
+      : 'Vacío';
+
+    const party2Text = party2.length > 0
+      ? party2.map((p, i) => {
+          const role = p.final_role ? ` - ${p.final_role}` : '';
+          const checkmark = p.final_role ? ' ✅' : '';
+          return `${i + 21}. ${p.user_name}${role}${checkmark}`;
+        }).join('\n')
+      : 'Vacío';
+
+    embed.addFields(
+      { name: '⚔️ Party 1', value: party1Text.substring(0, 1024) || 'Vacío', inline: true },
+      { name: '⚔️ Party 2', value: party2Text.substring(0, 1024) || 'Vacío', inline: true }
+    );
+  }
+
+  embed.setFooter({ text: `Event ID: ${cta.id}` });
+  embed.setTimestamp();
+
+  return embed;
+}
+
+function createCtaButtons(ctaId) {
+  const joinButton = new ButtonBuilder()
+    .setCustomId(`cta-join:${ctaId}`)
+    .setLabel('Join')
+    .setStyle(ButtonStyle.Success);
+
+  const leaveButton = new ButtonBuilder()
+    .setCustomId(`cta-leave:${ctaId}`)
+    .setLabel('Leave')
+    .setStyle(ButtonStyle.Danger);
+
+  const pingButton = new ButtonBuilder()
+    .setCustomId(`cta-ping:${ctaId}`)
+    .setLabel('Ping')
+    .setEmoji('⚔️')
+    .setStyle(ButtonStyle.Danger);
+
+  return new ActionRowBuilder().addComponents(joinButton, leaveButton, pingButton);
+}
+
+export async function handleButtonInteraction(interaction, ctaId, action) {
+  const userId = interaction.user.id;
+  const userName = interaction.user.username;
+
+  if (action === 'join') {
+    // Mostrar select menu para elegir roles
+    const selectMenu = new StringSelectMenuBuilder()
+      .setCustomId(`cta-postular:${ctaId}`)
+      .setPlaceholder('Selecciona hasta 3 roles')
+      .setMinValues(1)
+      .setMaxValues(3)
+      .addOptions([
+        { label: 'Tank', value: 'tank' },
+        { label: 'Healer', value: 'healer' },
+        { label: 'DPS Melee', value: 'dps_melee' },
+        { label: 'DPS Ranged', value: 'dps_ranged' },
+        { label: 'Support', value: 'support' },
+        { label: 'Scout', value: 'scout' }
+      ]);
+
+    const row = new ActionRowBuilder().addComponents(selectMenu);
+
+    await interaction.reply({
+      content: 'Elige los roles para los que quieres postularte:',
+      components: [row],
+      flags: MessageFlags.Ephemeral
+    });
+    return;
+  }
+
+  if (action === 'leave') {
+    try {
+      // TODO: Implementar endpoint para dejar CTA
+      await interaction.reply({
+        content: '✅ Te has retirado de la CTA',
+        flags: MessageFlags.Ephemeral
+      });
+    } catch (error) {
+      console.error('[bot] Error dejando CTA', error);
+      await interaction.reply({
+        content: '❌ No se pudo procesar tu solicitud',
+        flags: MessageFlags.Ephemeral
+      });
+    }
+    return;
+  }
+
+  if (action === 'ping') {
+    try {
+      // Obtener postulantes y hacer ping
+      const response = await fetch(`${API_BASE_URL}/cta/${ctaId}/postulants`);
+      if (!response.ok) throw new Error(`Error ${response.status}`);
+
+      const { data: postulants } = await response.json();
+      const mentions = postulants
+        .map(p => `<@${p.user_id}>`)
+        .join(' ');
+
+      await interaction.reply({
+        content: `⚔️ **Recordatorio de CTA!** ${mentions}`,
+        flags: MessageFlags.Ephemeral
+      });
+    } catch (error) {
+      console.error('[bot] Error haciendo ping', error);
+      await interaction.reply({
+        content: '❌ No se pudo hacer ping a los postulantes',
+        flags: MessageFlags.Ephemeral
+      });
+    }
+    return;
+  }
+}
+
 export async function handleAssignmentSelect(interaction, ctaId, userId) {
   const finalRole = interaction.values?.[0];
 
@@ -248,5 +434,5 @@ export async function handleAssignmentSelect(interaction, ctaId, userId) {
   }
 }
 
-export default { data, execute, handleAssignmentSelect };
+export default { data, execute, handleAssignmentSelect, handleButtonInteraction };
 
